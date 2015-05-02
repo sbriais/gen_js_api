@@ -1104,6 +1104,7 @@ and gen_decl = function
 
 and gen_classdecl cast_funcs = function
   | Declaration { class_name; class_fields } ->
+      let o = fresh() in
       let x = fresh() in
       let obj =
         Cl.structure
@@ -1116,9 +1117,10 @@ and gen_classdecl cast_funcs = function
       in
       let obj = Cl.let_ Nonrecursive (List.map ign cast_funcs) obj in
       let obj = Cl.let_ Nonrecursive cast_funcs obj in
+      let obj = Cl.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc x)) (js2ml Js (var o))] obj in
       Ci.mk
         (mknoloc class_name)
-        (Cl.fun_ Nolabel None (Pat.constraint_ (Pat.var (mknoloc x)) ojs_typ) obj)
+        (Cl.fun_ Nolabel None (Pat.constraint_ (Pat.var (mknoloc o)) ojs_typ) obj)
   | Constructor {class_name; js_class_name; class_arrow = {ty_args; ty_vararg; unit_arg; ty_res}} ->
       let formal_args, concrete_args = prepare_args ty_args ty_vararg in
       let obj = ojs_new_obj_arr (ojs_variable js_class_name) concrete_args in
