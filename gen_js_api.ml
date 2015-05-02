@@ -679,9 +679,9 @@ let rec sequence = function
   | [x] -> x
   | x :: xs -> Exp.sequence x (sequence xs)
 	     
-let rec check_typ ty exp =
+let check_typ ty exp =
   match ty with
-  | Js -> []
+  | Js -> [ check_defined exp ]
   | Name ("int", []) -> [ check_typeof "number" exp ]
   | Name ("bool", []) -> [ check_typeof "boolean" exp ]
   | Name ("float", []) -> [ check_typeof "number" exp ]
@@ -692,9 +692,9 @@ let rec check_typ ty exp =
        check_typeof "number" (ojs "get" [exp; str "length"]);
      ]
   | Tuple typs ->
-     let check_proj i typ =
+     let check_proj i _typ =
        let proj_i = ojs "array_get" [exp; int i] in
-       let_exp_in proj_i (fun proj -> sequence (check_defined proj :: check_typ typ proj))
+       check_defined proj_i
      in
      [ check_typeof "object" exp;
        check_typeof "number" (ojs "get" [exp; str "length"]);
