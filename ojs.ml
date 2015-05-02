@@ -40,8 +40,8 @@ external internal_set: t -> t -> t -> unit = "caml_js_set"
 external get: t -> string -> t = "caml_js_get"
 external set: t -> string -> t -> unit = "caml_js_set"
 
-external internal_type_of: t -> t = "caml_js_typeof"
-let type_of x = string_of_js (internal_type_of x)
+external internal_typeof: t -> t = "caml_js_typeof"
+let typeof x = string_of_js (internal_typeof x)
 
 external pure_js_expr: string -> t = "caml_pure_js_expr"
 let null = pure_js_expr "null"

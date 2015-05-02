@@ -100,7 +100,7 @@ val null: t
 
 external variable: string -> t = "caml_js_var"
 
-val type_of: t -> string
+val typeof: t -> string
 
 class obj: t ->
   object

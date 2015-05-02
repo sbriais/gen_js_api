@@ -713,7 +713,7 @@ and js2ml_of_enum ~variant {enums; string_default; int_default} exp =
         let case_int = Exp.case (Pat.constant (Const_string ("number", None))) (mk_match "int" int_cases) in
         let case_string = Exp.case (Pat.constant (Const_string ("string", None))) (mk_match "string" string_cases) in
         let case_default = Exp.case (Pat.any ()) assert_false in
-        Exp.match_ (ojs "type_of" [exp]) [case_int; case_string; case_default]
+        Exp.match_ (ojs "typeof" [exp]) [case_int; case_string; case_default]
   in
   let_exp_in exp to_ml
 
