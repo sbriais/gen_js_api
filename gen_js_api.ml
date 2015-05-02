@@ -251,10 +251,12 @@ let opt_cons x xs =
   | None -> xs
   | Some x -> x :: xs
 
+let const_string s = Const_string (s, None)
+		     
 let prepare_enum label loc attributes =
   let js =
     match get_expr_attribute "js" attributes with
-    | None -> {pexp_desc = Pexp_constant (Const_string (js_name label, None)); pexp_loc = loc; pexp_attributes = attributes}
+    | None -> {pexp_desc = Pexp_constant (const_string (js_name label)); pexp_loc = loc; pexp_attributes = attributes}
     | Some e -> e
   in
   label, js
@@ -522,7 +524,7 @@ and parse_class_field = function
 (** Code generation *)
 
 let var x = Exp.ident (mknoloc (Longident.parse x))
-let str s = Exp.constant (Const_string (s, None))
+let str s = Exp.constant (const_string s)
 let int n = Exp.constant (Const_int n)
 
 let attr s e = Str.attribute (mknoloc s, PStr [Str.eval e])
@@ -656,7 +658,80 @@ let ojs_new_obj_arr cl = function
 
 let assert_false = Exp.assert_ (Exp.construct (mknoloc (Longident.parse "false")) None)
 
+let safe_mode = ref false
+
+let check_typeof jstyp exp = 
+  Exp.match_
+    (ojs "typeof" [exp])
+    [ Exp.case (Pat.constant (const_string jstyp)) unit_expr;
+      Exp.case (Pat.any()) assert_false;
+    ]
+
+let check_defined exp =
+  Exp.match_
+    (ojs "typeof" [exp])
+    [ Exp.case (Pat.constant (const_string "undefined")) assert_false;
+      Exp.case (Pat.any()) unit_expr;
+    ]
+	     
+let rec sequence = function
+  | [] -> unit_expr
+  | [x] -> x
+  | x :: xs -> Exp.sequence x (sequence xs)
+	     
+let rec check_typ ty exp =
+  match ty with
+  | Js -> []
+  | Name ("int", []) -> [ check_typeof "number" exp ]
+  | Name ("bool", []) -> [ check_typeof "boolean" exp ]
+  | Name ("float", []) -> [ check_typeof "number" exp ]
+  | Name ("string", []) -> [ check_typeof "string" exp ]
+  | Name ("array", [_])
+  | Name ("list", [_]) ->
+     [ check_typeof "object" exp;
+       check_typeof "number" (ojs "get" [exp; str "length"]);
+     ]
+  | Tuple typs ->
+     let check_proj i typ =
+       let proj_i = ojs "array_get" [exp; int i] in
+       let_exp_in proj_i (fun proj -> sequence (check_defined proj :: check_typ typ proj))
+     in
+     [ check_typeof "object" exp;
+       check_typeof "number" (ojs "get" [exp; str "length"]);
+     ] @ (List.mapi check_proj typs)
+  | Arrow _ -> [ check_typeof "function" exp ]
+  | Enum {enums; string_default; int_default} ->
+     let has_int =
+       match int_default with
+       | None -> List.exists (function (_, js) -> typ_of_constant_exp js = "int") enums
+       | Some _ -> true
+     in
+     let has_string =
+       match string_default with
+       | None -> List.exists (function (_, js) -> typ_of_constant_exp js = "string") enums
+       | Some _ -> true
+     in
+     let cases = [ Exp.case (Pat.any()) assert_false ] in
+     let cases =
+       if has_int then (Exp.case (Pat.constant (const_string "number")) unit_expr) :: cases
+       else cases
+     in
+     let cases =
+       if has_string then (Exp.case (Pat.constant (const_string "string")) unit_expr) :: cases
+       else cases
+     in
+     [ Exp.match_ (ojs "typeof" [exp]) cases ]
+  | Name ("option", [_]) -> []
+  | Name (s, _) -> assert (not (builtin_type s)); []
+  | Union (loc, _) -> error loc Union_not_supported_here
+  | Unit loc -> error loc Unit_not_supported_here
+
 let rec js2ml ty exp =
+  if !safe_mode then js2ml_safe ty exp
+  else js2ml_unsafe ty exp
+and js2ml_safe ty exp =
+  let_exp_in exp (fun exp -> sequence ((check_typ ty exp) @ [js2ml_unsafe ty exp]))
+and js2ml_unsafe ty exp = 
   match ty with
   | Js ->
       exp
@@ -710,8 +785,8 @@ and js2ml_of_enum ~variant {enums; string_default; int_default} exp =
     | [], cases -> mk_match "string" cases
     | cases, [] -> mk_match "int" cases
     | _ ->
-        let case_int = Exp.case (Pat.constant (Const_string ("number", None))) (mk_match "int" int_cases) in
-        let case_string = Exp.case (Pat.constant (Const_string ("string", None))) (mk_match "string" string_cases) in
+        let case_int = Exp.case (Pat.constant (const_string "number")) (mk_match "int" int_cases) in
+        let case_string = Exp.case (Pat.constant (const_string "string")) (mk_match "string" string_cases) in
         let case_default = Exp.case (Pat.any ()) assert_false in
         Exp.match_ (ojs "typeof" [exp]) [case_int; case_string; case_default]
   in
@@ -1243,6 +1318,8 @@ let out = ref ""
 let specs =
   [
     "-o", Arg.Set_string out, "  Specify output .ml file (- for stdout).";
+    "-safe", Arg.Set safe_mode, "  Safe mode.";
+    "-unsafe", Arg.Set safe_mode, "  Unsafe mode.";    
   ]
 
 let usage = "gen_js_api [-o mymodule.ml] mymodule.mli"
