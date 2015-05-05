@@ -252,7 +252,7 @@ let opt_cons x xs =
   | Some x -> x :: xs
 
 let const_string s = Const_string (s, None)
-		     
+
 let prepare_enum label loc attributes =
   let js =
     match get_expr_attribute "js" attributes with
@@ -660,7 +660,7 @@ let assert_false = Exp.assert_ (Exp.construct (mknoloc (Longident.parse "false")
 
 let safe_mode = ref false
 
-let check_typeof jstyp exp = 
+let check_typeof jstyp exp =
   Exp.match_
     (ojs "typeof" [exp])
     [ Exp.case (Pat.constant (const_string jstyp)) unit_expr;
@@ -673,12 +673,12 @@ let check_defined exp =
     [ Exp.case (Pat.constant (const_string "undefined")) assert_false;
       Exp.case (Pat.any()) unit_expr;
     ]
-	     
+
 let rec sequence = function
   | [] -> unit_expr
   | [x] -> x
   | x :: xs -> Exp.sequence x (sequence xs)
-	     
+
 let check_typ ty exp =
   match ty with
   | Js -> [ check_defined exp ]
@@ -731,7 +731,7 @@ let rec js2ml ty exp =
   else js2ml_unsafe ty exp
 and js2ml_safe ty exp =
   let_exp_in exp (fun exp -> sequence ((check_typ ty exp) @ [js2ml_unsafe ty exp]))
-and js2ml_unsafe ty exp = 
+and js2ml_unsafe ty exp =
   match ty with
   | Js ->
       exp
@@ -1321,7 +1321,7 @@ let specs =
   [
     "-o", Arg.Set_string out, "  Specify output .ml file (- for stdout).";
     "-safe", Arg.Set safe_mode, "  Safe mode.";
-    "-unsafe", Arg.Set safe_mode, "  Unsafe mode.";    
+    "-unsafe", Arg.Set safe_mode, "  Unsafe mode.";
   ]
 
 let usage = "gen_js_api [-o mymodule.ml] mymodule.mli"
